@@ -1,0 +1,28 @@
+{
+  "name": "ArduinoTelnet",
+  "version": "1.0.0",
+  "description": "Provides a telnet shell over WiFi",
+  "keywords": "telnet, shell",
+  "repository":
+  {
+    "type": "git",
+    "url": "https://github.com/Fischer-Simon/ArduinoTelnet.git"
+  },
+  "authors":
+  [
+    {
+      "name": "Fischer-Simon"
+    }
+  ],
+  "dependencies": {
+    "WiFi": "~2"
+  },
+  "headers": [
+    "ArduinoTelnet.h",
+    "Ansi.h"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/Fischer-Simon/ArduinoTelnet",
+  "frameworks": "arduino",
+  "platforms": "espressif32"
+}
