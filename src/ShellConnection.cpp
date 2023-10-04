@@ -152,6 +152,7 @@ bool ShellConnection::loop() {
             m_client.write("^C\r\n");
             printPrompt();
             overwriteLineBuffer("");
+            m_historyIterator = m_history.end();
         } else if (c == 27) { // ESC
             m_client.readBytes(&c, 1);
             if (c != '[') {
