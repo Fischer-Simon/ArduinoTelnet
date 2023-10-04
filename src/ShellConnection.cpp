@@ -17,31 +17,26 @@ ShellConnection::ShellConnection(ArduinoTelnet& shell, const WiFiClient& client,
         m_historyIterator{m_history.end()} {
 }
 
-void ShellConnection::processLine() {
-    if (m_gotTelnetCommand) {
-        m_client.println();
-    }
+int ShellConnection::processLine() {
     if (m_lineBuffer.empty()) {
+        if (m_gotTelnetCommand) {
+            m_client.println();
+        }
         printPrompt();
-        return;
-    }
-
-    if (m_history.empty() || m_history.back() != m_lineBuffer) {
-        m_history.push_back(m_lineBuffer);
-    }
-    m_historyIterator = m_history.end();
-    if (m_history.size() > 10) {
-        m_history.erase(m_history.begin());
-        m_historyIterator = m_history.end();
+        return 0;
     }
 
     std::stringstream lineStream{m_lineBuffer};
     std::string arg;
     arg.reserve(m_lineBuffer.size());
     std::vector<std::string> argv;
+    int commandSeparatorPosition = 0;
     bool isInQuotation = false;
+    char quotationCharacter = 0;
     bool escapeSequence = false;
+    int i = 0;
     for (char c : m_lineBuffer) {
+        i++;
         if (escapeSequence) {
             switch (c) {
                 case 'n':
@@ -61,29 +56,59 @@ void ShellConnection::processLine() {
             escapeSequence = true;
             continue;
         }
-        if (c == '"') {
-            isInQuotation = !isInQuotation;
+        if (isInQuotation && c == quotationCharacter) {
+            isInQuotation = false;
             continue;
         }
-        if (c == ' ' && !isInQuotation) {
+        if (!isInQuotation && (c == '"' || c == '\'')) {
+            isInQuotation = true;
+            quotationCharacter = c;
+            continue;
+        }
+        if (isInQuotation) {
+            arg.push_back(c);
+            continue;
+        }
+
+        if (c == ' ') {
+            if (arg.empty()) {
+                continue;
+            }
             argv.emplace_back(arg);
             arg.clear();
-        } else {
-            arg.push_back(c);
+            continue;
         }
+
+        if (c == ';') {
+            commandSeparatorPosition = i;
+            break;
+        }
+
+        arg.push_back(c);
     }
     if (!arg.empty()) {
         argv.emplace_back(arg);
     }
 
-    if (argv[0] == "help") {
-        argv.erase(argv.begin());
-        printHelp(m_client, argv);
-    } else {
-        m_shell.executeCommand(m_client, argv);
+    if (!argv.empty()) {
+        if (m_gotTelnetCommand) {
+            m_client.println();
+        }
+        if (argv[0] == "help") {
+            argv.erase(argv.begin());
+            printHelp(m_client, argv);
+        } else {
+            m_shell.executeCommand(m_client, argv);
+        }
     }
 
-    printPrompt();
+    if (commandSeparatorPosition == 0) {
+        if (argv.empty() && m_gotTelnetCommand) {
+            m_client.println();
+        }
+        printPrompt();
+    }
+    return commandSeparatorPosition;
 }
 
 void ShellConnection::printHelp(Print& output, std::vector<std::string>& argv) {
@@ -146,7 +171,19 @@ bool ShellConnection::loop() {
             if (m_historyIterator != m_history.end()) {
                 m_lineBuffer = *m_historyIterator;
             }
-            processLine();
+            if (m_history.empty() || m_history.back() != m_lineBuffer) {
+                m_history.push_back(m_lineBuffer);
+            }
+            m_historyIterator = m_history.end();
+            if (m_history.size() > 10) {
+                m_history.erase(m_history.begin());
+                m_historyIterator = m_history.end();
+            }
+
+            while (int i = processLine()) {
+                Serial.println(i);
+                m_lineBuffer = m_lineBuffer.substr(i);
+            }
             overwriteLineBuffer("");
         } else if (c == 3) { // CTRL+c
             m_client.write("^C\r\n");
