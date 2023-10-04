@@ -1,8 +1,6 @@
 #include "ArduinoTelnet.h"
 #include "ShellCommands.h"
-#include "Ansi.h"
 #include "WiFi.h"
-#include "TelnetCommand.h"
 #include <Print.h>
 
 ArduinoTelnet::ArduinoTelnet(int port, const char* firmwareInfo) {
