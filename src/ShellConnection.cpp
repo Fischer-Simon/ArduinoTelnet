@@ -7,10 +7,10 @@
 #include "ArduinoTelnet.h"
 #include "TelnetCommand.h"
 
-ShellConnection::ShellConnection(ArduinoTelnet& shell, const WiFiClient& client, const char* firmwareInfo) :
+ShellConnection::ShellConnection(ArduinoTelnet& shell, const WiFiClient& client, std::string firmwareInfo) :
         m_shell{shell},
         m_client{client},
-        m_firmwareInfo{firmwareInfo},
+        m_firmwareInfo{std::move(firmwareInfo)},
         m_lineBuffer{},
         m_lineBufferIterator{m_lineBuffer.end()},
         m_history{},
@@ -143,8 +143,8 @@ void ShellConnection::printWelcome() {
     m_client.print("Welcome to the ");
     m_client.print(WiFiClass::getHostname());
     m_client.println(" command line interface.");
-    if (m_firmwareInfo != nullptr) {
-        m_client.println(m_firmwareInfo);
+    if (!m_firmwareInfo.empty()) {
+        m_client.println(m_firmwareInfo.c_str());
     }
     m_client.println("You can type your commands, type 'help' for a list of commands");
     printPrompt();

@@ -17,7 +17,9 @@ class ArduinoTelnet {
     friend class ShellConnection;
 
 public:
-    ArduinoTelnet(int port, const char* firmwareInfo = nullptr);
+    ArduinoTelnet(int port, std::string firmwareInfo = "");
+
+    void setFirmwareInfo(std::string firmwareInfo);
 
     void addCommand(const std::string& name, ShellCommand* command);
 
@@ -30,7 +32,7 @@ public:
     static void printUsage(Print& output, const std::string& commandName, const ShellCommand& command);
 
 private:
-    const char* m_firmwareInfo = nullptr;
+    std::string m_firmwareInfo;
     std::map<std::string, std::unique_ptr<ShellCommand>> m_commands;
     WiFiServer m_server;
     std::list<ShellConnection> m_connections;

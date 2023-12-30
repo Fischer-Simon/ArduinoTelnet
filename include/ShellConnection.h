@@ -10,14 +10,19 @@ class ShellConnection {
 public:
     static const int LineSizeLimit = 1024;
 
-    ShellConnection(ArduinoTelnet& shell, const WiFiClient& client, const char* firmwareInfo);
+    ShellConnection(ArduinoTelnet& shell, const WiFiClient& client, std::string firmwareInfo);
 
     bool loop();
 
     void handleTelnetCommand();
 
 private:
-    void processLine();
+    /**
+     * Process one command.
+     * Commands can be separated by ';'
+     * @return The character index after the first encountered ';' or 0 if none was encountered
+     */
+    int processLine();
 
     void printHelp(Print& output, std::vector<std::string>& argv);
 
@@ -29,7 +34,7 @@ private:
 
     ArduinoTelnet& m_shell;
     WiFiClient m_client;
-    const char* m_firmwareInfo;
+    std::string m_firmwareInfo;
     bool m_gotTelnetCommand{false};
     std::string m_lineBuffer;
     std::string::iterator m_lineBufferIterator;

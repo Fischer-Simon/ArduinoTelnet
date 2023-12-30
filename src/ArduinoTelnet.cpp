@@ -3,13 +3,17 @@
 #include "WiFi.h"
 #include <Print.h>
 
-ArduinoTelnet::ArduinoTelnet(int port, const char* firmwareInfo) {
+ArduinoTelnet::ArduinoTelnet(int port, std::string firmwareInfo) :
+m_firmwareInfo{std::move(firmwareInfo)} {
     m_server.begin(port);
     m_server.setNoDelay(true);
-    m_firmwareInfo = firmwareInfo;
     addCommand("test", new TestCommand);
     addCommand("reset", new ResetCommand);
     addCommand("hex", new HexCommand);
+}
+
+void ArduinoTelnet::setFirmwareInfo(std::string firmwareInfo) {
+    m_firmwareInfo = std::move(firmwareInfo);
 }
 
 void ArduinoTelnet::addCommand(const std::string& name, ShellCommand* command) {
