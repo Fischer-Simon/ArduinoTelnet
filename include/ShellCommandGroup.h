@@ -7,8 +7,8 @@
 
 class ShellCommandGroup : public ShellCommand {
 public:
-    void execute(Print& output, const std::string& commandName, std::vector<std::string>& args) override {
-        executeSubCommands(output, commandName, args);
+    void execute(Stream& io, const std::string& commandName, std::vector<std::string>& args) override {
+        executeSubCommands(io, commandName, args);
     }
 
     void printUsage(Print& output) const override {
@@ -20,7 +20,7 @@ public:
 protected:
     void addSubCommand(const std::string& name, ShellCommand* command);
 
-    void executeSubCommands(Print& output, const std::string& commandName, std::vector<std::string>& args);
+    void executeSubCommands(Stream& io, const std::string& mainCommandName, std::vector<std::string>& args);
 
     void printSubCommandUsage(Print& output) const;
 

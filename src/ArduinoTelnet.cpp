@@ -17,24 +17,33 @@ void ArduinoTelnet::setFirmwareInfo(std::string firmwareInfo) {
 }
 
 void ArduinoTelnet::addCommand(const std::string& name, ShellCommand* command) {
-    m_commands.emplace(name, std::move(std::unique_ptr<ShellCommand>(command)));
+    addCommand(name, std::shared_ptr<ShellCommand>(command));
 }
 
-void ArduinoTelnet::executeCommand(Print& output, std::vector<std::string>& argv) {
+void ArduinoTelnet::addCommand(const std::string& name, std::shared_ptr<ShellCommand> command) {
+    m_commands.emplace(name, std::move(command));
+}
+
+void ArduinoTelnet::executeCommand(Stream& io, std::vector<std::string>& argv) {
     std::string commandName = argv.front();
     auto command = m_commands.find(commandName);
     if (command == m_commands.end()) {
-        ArduinoTelnet::printCommandNotFound(output, commandName);
+        ArduinoTelnet::printCommandNotFound(io, commandName);
         return;
     }
 
     argv.erase(argv.begin());
-    command->second->execute(output, commandName, argv);
+    command->second->execute(io, commandName, argv);
+}
+
+void ArduinoTelnet::addClient(std::shared_ptr<ShellClient> client) {
+    m_connections.emplace_back(*this, std::move(client), m_firmwareInfo);
 }
 
 void ArduinoTelnet::loop() {
     while (auto client = m_server.available()) {
-        m_connections.emplace_back(*this, client, m_firmwareInfo);
+        std::shared_ptr<ShellClient> shellClient{new WiFiShellClient{client}};
+        m_connections.emplace_back(*this, std::move(shellClient), m_firmwareInfo);
     }
     auto i = m_connections.begin();
     while (i != m_connections.end()) {
@@ -61,3 +70,38 @@ void ArduinoTelnet::printUsage(Print& output, const std::string& commandName, co
     command.printUsage(output);
 }
 
+size_t ArduinoTelnet::WiFiShellClient::write(uint8_t uint8) {
+    return m_client.write(uint8);
+}
+
+int ArduinoTelnet::WiFiShellClient::available() {
+    return m_client.available();
+}
+
+int ArduinoTelnet::WiFiShellClient::read() {
+    return m_client.read();
+}
+
+int ArduinoTelnet::WiFiShellClient::peek() {
+    return m_client.peek();
+}
+
+bool ArduinoTelnet::WiFiShellClient::active() {
+    return m_client.connected();
+}
+
+void ArduinoTelnet::WiFiShellClient::quit() {
+    m_client.stop();
+}
+
+size_t ArduinoTelnet::WiFiShellClient::write(const uint8_t* buffer, size_t size) {
+    return m_client.write(buffer, size);
+}
+
+size_t ArduinoTelnet::WiFiShellClient::readBytes(char* buffer, size_t length) {
+    return m_client.readBytes(buffer, length);
+}
+
+size_t ArduinoTelnet::WiFiShellClient::readBytes(uint8_t* buffer, size_t length) {
+    return m_client.readBytes(buffer, length);
+}

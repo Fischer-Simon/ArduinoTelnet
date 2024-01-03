@@ -11,8 +11,8 @@ std::unique_ptr<ArduinoTelnet> telnet;
 
 class ExampleCommand : public ShellCommand {
 public:
-    void execute(Print& output, const std::string& commandName, std::vector<std::string>& args) override {
-        output.println("This is a command example");
+    void execute(Stream& io, const std::string& commandName, std::vector<std::string>& args) override {
+        io.println("This is a command example");
     }
 
     void printHelp(Print& output, const std::string& commandName, std::vector<std::string>& args) const override {
@@ -22,13 +22,13 @@ public:
 
 class ExampleArgCommand : public ShellCommand {
 public:
-    void execute(Print& output, const std::string& commandName, std::vector<std::string>& args) override {
+    void execute(Stream& io, const std::string& commandName, std::vector<std::string>& args) override {
         if (args.size() != 1) {
-            ArduinoTelnet::printUsage(output, commandName, *this);
+            ArduinoTelnet::printUsage(io, commandName, *this);
             return;
         }
-        output.print("The first argument is: ");
-        output.println(args[0].c_str());
+        io.print("The first argument is: ");
+        io.println(args[0].c_str());
     }
 
     void printUsage(Print& output) const override {

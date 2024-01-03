@@ -3,9 +3,9 @@
 #include <Arduino.h>
 #include <ArduinoTelnet.h>
 
-void ResetCommand::execute(Print& output, const std::string& commandName, std::vector<std::string>& args) {
-    output.println("Resetting");
-    output.flush();
+void ResetCommand::execute(Stream& io, const std::string& commandName, std::vector<std::string>& args) {
+    io.println("Resetting");
+    io.flush();
     delay(100);
     ESP.restart();
 }
@@ -15,9 +15,9 @@ void ResetCommand::printHelp(Print& output, const std::string& commandName, std:
     output.println("Reset the ESP");
 }
 
-void TestCommand::execute(Print& output, const std::string& commandName, std::vector<std::string>& args) {
-    output.print("Test: ");
-    output.println(args.size());
+void TestCommand::execute(Stream& io, const std::string& commandName, std::vector<std::string>& args) {
+    io.print("Test: ");
+    io.println(args.size());
 }
 
 void TestCommand::printUsage(Print& output) const {
@@ -29,15 +29,15 @@ void TestCommand::printHelp(Print& output, const std::string& commandName, std::
     output.println("Print the number of command arguments.");
 }
 
-void HexCommand::execute(Print& output, const std::string& commandName, std::vector<std::string>& args) {
+void HexCommand::execute(Stream& io, const std::string& commandName, std::vector<std::string>& args) {
     if (args.size() != 1) {
-        ArduinoTelnet::printUsage(output, commandName, *this);
+        ArduinoTelnet::printUsage(io, commandName, *this);
         return;
     }
     for (char c : args[0]) {
-        output.print(c, HEX);
+        io.print(c, HEX);
     }
-    output.println();
+    io.println();
 }
 
 void HexCommand::printUsage(Print& output) const {

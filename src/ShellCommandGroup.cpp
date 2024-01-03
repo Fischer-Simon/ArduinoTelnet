@@ -18,21 +18,21 @@ void ShellCommandGroup::addSubCommand(const std::string& name, ShellCommand* com
     m_subCommands.emplace(name, std::move(std::unique_ptr<ShellCommand>(command)));
 }
 
-void ShellCommandGroup::executeSubCommands(Print& output, const std::string& mainCommandName, std::vector<std::string>& args) {
+void ShellCommandGroup::executeSubCommands(Stream& io, const std::string& mainCommandName, std::vector<std::string>& args) {
     if (args.empty()) {
-        ArduinoTelnet::printUsage(output, mainCommandName, *this);
+        ArduinoTelnet::printUsage(io, mainCommandName, *this);
         return;
     }
 
     std::string subCommandName = args.front();
     auto command = m_subCommands.find(subCommandName);
     if (command == m_subCommands.end()) {
-        ArduinoTelnet::printCommandNotFound(output, subCommandName);
+        ArduinoTelnet::printCommandNotFound(io, subCommandName);
         return;
     }
 
     args.erase(args.begin());
-    command->second->execute(output, mainCommandName + " " + subCommandName, args);
+    command->second->execute(io, mainCommandName + " " + subCommandName, args);
 }
 
 void ShellCommandGroup::printSubCommandUsage(Print& output) const {

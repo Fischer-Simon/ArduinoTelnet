@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <WiFiClient.h>
 #include <vector>
+#include "ShellClient.h"
 
 class ArduinoTelnet;
 
@@ -10,7 +11,7 @@ class ShellConnection {
 public:
     static const int LineSizeLimit = 1024;
 
-    ShellConnection(ArduinoTelnet& shell, const WiFiClient& client, std::string firmwareInfo);
+    ShellConnection(ArduinoTelnet& shell, std::shared_ptr<ShellClient> client, std::string firmwareInfo);
 
     bool loop();
 
@@ -33,7 +34,7 @@ private:
     void overwriteLineBuffer(const std::string&);
 
     ArduinoTelnet& m_shell;
-    WiFiClient m_client;
+    std::shared_ptr<ShellClient> m_client;
     std::string m_firmwareInfo;
     bool m_gotTelnetCommand{false};
     std::string m_lineBuffer;

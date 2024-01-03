@@ -7,9 +7,9 @@
 #include "ArduinoTelnet.h"
 #include "TelnetCommand.h"
 
-ShellConnection::ShellConnection(ArduinoTelnet& shell, const WiFiClient& client, std::string firmwareInfo) :
+ShellConnection::ShellConnection(ArduinoTelnet& shell, std::shared_ptr<ShellClient> client, std::string firmwareInfo) :
         m_shell{shell},
-        m_client{client},
+        m_client{std::move(client)},
         m_firmwareInfo{std::move(firmwareInfo)},
         m_lineBuffer{},
         m_lineBufferIterator{m_lineBuffer.end()},
@@ -20,9 +20,13 @@ ShellConnection::ShellConnection(ArduinoTelnet& shell, const WiFiClient& client,
 int ShellConnection::processLine() {
     if (m_lineBuffer.empty()) {
         if (m_gotTelnetCommand) {
-            m_client.println();
+            m_client->println();
         }
         printPrompt();
+        return 0;
+    }
+
+    if (m_lineBuffer[0] == '#') {
         return 0;
     }
 
@@ -92,19 +96,20 @@ int ShellConnection::processLine() {
 
     if (!argv.empty()) {
         if (m_gotTelnetCommand) {
-            m_client.println();
+            m_client->println();
         }
         if (argv[0] == "help") {
             argv.erase(argv.begin());
-            printHelp(m_client, argv);
+            printHelp(*m_client, argv);
         } else {
-            m_shell.executeCommand(m_client, argv);
+            m_shell.executeCommand(*m_client, argv);
         }
+        m_client->onCommandEnd();
     }
 
     if (commandSeparatorPosition == 0) {
         if (argv.empty() && m_gotTelnetCommand) {
-            m_client.println();
+            m_client->println();
         }
         printPrompt();
     }
@@ -135,30 +140,30 @@ void ShellConnection::printPrompt() {
     if (!m_gotTelnetCommand) {
         return;
     }
-    m_client.print(WiFiClass::getHostname());
-    m_client.print("> ");
+    m_client->print(WiFiClass::getHostname());
+    m_client->print("> ");
 }
 
 void ShellConnection::printWelcome() {
-    m_client.print("Welcome to the ");
-    m_client.print(WiFiClass::getHostname());
-    m_client.println(" command line interface.");
+    m_client->print("Welcome to the ");
+    m_client->print(WiFiClass::getHostname());
+    m_client->println(" command line interface.");
     if (!m_firmwareInfo.empty()) {
-        m_client.println(m_firmwareInfo.c_str());
+        m_client->println(m_firmwareInfo.c_str());
     }
-    m_client.println("You can type your commands, type 'help' for a list of commands");
+    m_client->println("You can type your commands, type 'help' for a list of commands");
     printPrompt();
 }
 
 bool ShellConnection::loop() {
-    if (!m_client.connected()) {
+    if (!m_client->active()) {
         return false;
     }
 
     uint8_t c;
 
-    while (m_client.available()) {
-        if (m_client.read(&c, 1) != 1) {
+    while (m_client->available()) {
+        if (m_client->readBytes(&c, 1) != 1) {
             return false;
         }
 
@@ -168,6 +173,11 @@ bool ShellConnection::loop() {
         }
 
         if (c == '\n' || c == '\r') {
+            if (m_gotTelnetCommand) {
+                // Read the additional null byte sent by the telnet client.
+                m_client->read();
+            }
+
             if (m_historyIterator != m_history.end()) {
                 m_lineBuffer = *m_historyIterator;
             }
@@ -186,25 +196,25 @@ bool ShellConnection::loop() {
             }
             overwriteLineBuffer("");
         } else if (c == 3) { // CTRL+c
-            m_client.write("^C\r\n");
+            m_client->write("^C\r\n");
             printPrompt();
             overwriteLineBuffer("");
             m_historyIterator = m_history.end();
         } else if (c == 27) { // ESC
-            m_client.readBytes(&c, 1);
+            m_client->readBytes(&c, 1);
             if (c != '[') {
                 continue;
             }
-            m_client.readBytes(&c, 1);
+            m_client->readBytes(&c, 1);
             switch (c) {
                 case 'A': // Up
                     if (m_historyIterator != m_history.begin()) {
                         const std::string& currentLine = m_historyIterator == m_history.end() ? m_lineBuffer : *m_historyIterator;
                         m_historyIterator--;
                         const std::string& newLine = *m_historyIterator;
-                        m_client.write(ANSI_CLEAR_LINE"\r");
+                        m_client->write(ANSI_CLEAR_LINE"\r");
                         printPrompt();
-                        m_client.write(newLine.c_str());
+                        m_client->write(newLine.c_str());
                     }
                     break;
                 case 'B': // Down
@@ -212,15 +222,15 @@ bool ShellConnection::loop() {
                         const std::string& currentLine = *m_historyIterator;
                         m_historyIterator++;
                         const std::string& newLine = m_historyIterator == m_history.end() ? m_lineBuffer : *m_historyIterator;
-                        m_client.write(ANSI_CLEAR_LINE"\r");
+                        m_client->write(ANSI_CLEAR_LINE"\r");
                         printPrompt();
-                        m_client.write(newLine.c_str());
+                        m_client->write(newLine.c_str());
                     }
                     break;
                 case 'C': // Right
                     if (m_lineBufferIterator != m_lineBuffer.end()) {
                         m_lineBufferIterator++;
-                        m_client.print(ANSI_CURSOR_RIGHT(1));
+                        m_client->print(ANSI_CURSOR_RIGHT(1));
                     }
                     break;
                 case 'D': // Left
@@ -230,12 +240,12 @@ bool ShellConnection::loop() {
                     }
                     if (m_lineBufferIterator != m_lineBuffer.begin()) {
                         m_lineBufferIterator--;
-                        m_client.print(ANSI_CURSOR_LEFT(1));
+                        m_client->print(ANSI_CURSOR_LEFT(1));
                     }
                     break;
             }
         } else if (c == 4) { // EOF
-            m_client.stop();
+            m_client->quit();
         } else if (c == 127) { // DEL
             if (m_historyIterator != m_history.end()) {
                 overwriteLineBuffer(*m_historyIterator);
@@ -244,7 +254,7 @@ bool ShellConnection::loop() {
             if (!m_lineBuffer.empty() && m_lineBufferIterator != m_lineBuffer.begin()) {
                 m_lineBufferIterator = m_lineBuffer.erase(m_lineBufferIterator - 1);
                 int distance = m_lineBufferIterator - m_lineBuffer.begin();
-                m_client.printf(ANSI_CURSOR_LEFT(1) ANSI_CURSOR_SAVE "%s " ANSI_CURSOR_RESTORE, m_lineBuffer.c_str() + distance);
+                m_client->printf(ANSI_CURSOR_LEFT(1) ANSI_CURSOR_SAVE "%s " ANSI_CURSOR_RESTORE, m_lineBuffer.c_str() + distance);
             }
         } else if (c >= 32) {
             if (m_historyIterator != m_history.end()) {
@@ -257,10 +267,10 @@ bool ShellConnection::loop() {
             }
             if (m_lineBufferIterator == m_lineBuffer.end()) {
                 if (m_gotTelnetCommand) {
-                    m_client.write(c);
+                    m_client->write(c);
                 }
             } else {
-                m_client.printf(ANSI_CURSOR_SAVE "%s" ANSI_CURSOR_RESTORE ANSI_CURSOR_RIGHT(1), m_lineBuffer.c_str() + distance);
+                m_client->printf(ANSI_CURSOR_SAVE "%s" ANSI_CURSOR_RESTORE ANSI_CURSOR_RIGHT(1), m_lineBuffer.c_str() + distance);
             }
         }
     }
@@ -278,24 +288,24 @@ void ShellConnection::handleTelnetCommand() {
 
     if (!m_gotTelnetCommand) {
         m_gotTelnetCommand = true;
-        writeTelnetResponse(TelnetCommand::WILL, TelnetOption::Echo, m_client);
-        writeTelnetResponse(TelnetCommand::DONT, TelnetOption::Echo, m_client);
-        writeTelnetResponse(TelnetCommand::WILL, TelnetOption::SuppressGoAhead, m_client);
+        writeTelnetResponse(TelnetCommand::WILL, TelnetOption::Echo, *m_client);
+        writeTelnetResponse(TelnetCommand::DONT, TelnetOption::Echo, *m_client);
+        writeTelnetResponse(TelnetCommand::WILL, TelnetOption::SuppressGoAhead, *m_client);
         printWelcome();
     }
 
-    m_client.readBytes(&c, 1);
-//    m_client.printf("IAC,%s", telnetCommandToString(cmd));
+    m_client->readBytes(&c, 1);
+//    m_client->printf("IAC,%s", telnetCommandToString(cmd));
 
     TelnetOption opt;
     if (cmd == TelnetCommand::WILL || cmd == TelnetCommand::DO || cmd == TelnetCommand::WONT || cmd == TelnetCommand::DONT || cmd == TelnetCommand::SB) {
-        m_client.readBytes((uint8_t*)&opt, 1);
-//        m_client.printf(",%s", telnetOptionToString(opt));
+        m_client->readBytes((uint8_t*)&opt, 1);
+//        m_client->printf(",%s", telnetOptionToString(opt));
     }
 
     switch (cmd) {
         case TelnetCommand::EOF_:
-            m_client.stop();
+            m_client->quit();
             return;
         case TelnetCommand::DO:
             switch (opt) {
@@ -312,7 +322,7 @@ void ShellConnection::handleTelnetCommand() {
                 case TelnetOption::TerminalType:
 //                    writeTelnetResponse(TelnetCommand::DO, opt, m_client);
 //                    writeTelnetResponse(TelnetCommand::SB, opt, m_client);
-//                    m_client.write((char)1);
+//                    m_client->write((char)1);
 //                    writeTelnetCommand(TelnetCommand::SE, m_client);
                     break;
                 default:
@@ -328,23 +338,23 @@ void ShellConnection::handleTelnetCommand() {
 //            writeTelnetOption(opt, m_client);
             break;
         case TelnetCommand::SB:
-            m_client.readBytes(&c, 1);
-            for (int i = 0; cmd != TelnetCommand::IAC; i++, m_client.readBytes(&c, 1)) {
+            m_client->readBytes(&c, 1);
+            for (int i = 0; cmd != TelnetCommand::IAC; i++, m_client->readBytes(&c, 1)) {
                 if (i >= 16) {
                     continue;
                 }
                 buf[i] = c;
             }
-//            m_client.printf(",%i", buf[0]);
+//            m_client->printf(",%i", buf[0]);
             if (buf[0] == 1) {
                 // Value requested
             } else {
                 // Value provided
-//                m_client.printf(",%s", &buf[1]);
+//                m_client->printf(",%s", &buf[1]);
             }
-            m_client.readBytes(&c, 1); // Should be SE.
+            m_client->readBytes(&c, 1); // Should be SE.
     }
-//    m_client.println();
+//    m_client->println();
 }
 
 void ShellConnection::overwriteLineBuffer(const std::string& line) {
