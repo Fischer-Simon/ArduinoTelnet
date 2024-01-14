@@ -8,6 +8,13 @@ public:
 
     virtual void quit() = 0;
 
+    virtual bool endOfData() {
+        return false;
+    }
+
+    virtual void clearEndOfData() {
+    }
+
     virtual void onCommandEnd() {
     }
 };
