@@ -19,7 +19,7 @@ ShellConnection::ShellConnection(ArduinoTelnet& shell, std::shared_ptr<ShellClie
 
 int ShellConnection::processLine() {
     if (m_lineBuffer.empty()) {
-        if (m_gotTelnetCommand) {
+        if (m_gotTelnetCommand || m_client->forceEcho()) {
             m_client->println();
         }
         printPrompt();
@@ -95,7 +95,7 @@ int ShellConnection::processLine() {
     }
 
     if (!argv.empty()) {
-        if (m_gotTelnetCommand) {
+        if (m_gotTelnetCommand || m_client->forceEcho()) {
             m_client->println();
         }
         if (argv[0] == "help") {
@@ -108,7 +108,7 @@ int ShellConnection::processLine() {
     }
 
     if (commandSeparatorPosition == 0) {
-        if (argv.empty() && m_gotTelnetCommand) {
+        if (argv.empty() && m_gotTelnetCommand || m_client->forceEcho()) {
             m_client->println();
         }
         printPrompt();
@@ -137,7 +137,7 @@ void ShellConnection::printHelp(Print& output, std::vector<std::string>& argv) {
 }
 
 void ShellConnection::printPrompt() {
-    if (!m_gotTelnetCommand) {
+    if (!m_gotTelnetCommand && !m_client->forceEcho()) {
         return;
     }
     m_client->print(WiFiClass::getHostname());
@@ -178,23 +178,24 @@ bool ShellConnection::loop() {
                 m_client->read();
             }
 
-            if (m_historyIterator != m_history.end()) {
-                m_lineBuffer = *m_historyIterator;
-            }
-            if (m_history.empty() || m_history.back() != m_lineBuffer) {
-                m_history.push_back(m_lineBuffer);
-            }
-            m_historyIterator = m_history.end();
-            if (m_history.size() > 10) {
-                m_history.erase(m_history.begin());
+            if (!m_lineBuffer.empty() || m_historyIterator != m_history.end() || c == '\n') {
+                if (m_historyIterator != m_history.end()) {
+                    m_lineBuffer = *m_historyIterator;
+                }
+                if (m_history.empty() || m_history.back() != m_lineBuffer) {
+                    m_history.push_back(m_lineBuffer);
+                }
                 m_historyIterator = m_history.end();
-            }
+                if (m_history.size() > 10) {
+                    m_history.erase(m_history.begin());
+                    m_historyIterator = m_history.end();
+                }
 
-            while (int i = processLine()) {
-                Serial.println(i);
-                m_lineBuffer = m_lineBuffer.substr(i);
+                while (int i = processLine()) {
+                    m_lineBuffer = m_lineBuffer.substr(i);
+                }
+                overwriteLineBuffer("");
             }
-            overwriteLineBuffer("");
         } else if (c == 3) { // CTRL+c
             m_client->write("^C\r\n");
             printPrompt();
@@ -246,7 +247,7 @@ bool ShellConnection::loop() {
             }
         } else if (c == 4) { // EOF
             m_client->quit();
-        } else if (c == 127) { // DEL
+        } else if (c == 127 || c == 8) { // DEL
             if (m_historyIterator != m_history.end()) {
                 overwriteLineBuffer(*m_historyIterator);
                 m_historyIterator = m_history.end();
@@ -266,7 +267,7 @@ bool ShellConnection::loop() {
                 m_lineBufferIterator = m_lineBuffer.insert(m_lineBufferIterator, (char)c) + 1;
             }
             if (m_lineBufferIterator == m_lineBuffer.end()) {
-                if (m_gotTelnetCommand) {
+                if (m_gotTelnetCommand || m_client->forceEcho()) {
                     m_client->write(c);
                 }
             } else {

@@ -17,4 +17,8 @@ public:
 
     virtual void onCommandEnd() {
     }
+
+    virtual bool forceEcho() {
+        return false;
+    }
 };
